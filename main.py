@@ -94,6 +94,59 @@ async def call_third_party(request: Request, third_party_request: Optional[Third
     调用第三方接口
     """
     try:
+        # 获取查询参数
+        query_params = dict(request.query_params)
+
+        # 使用请求中的配置或环境变量中的默认配置
+        url = third_party_request.url if third_party_request and third_party_request.url else THIRD_PARTY_URL
+        method = third_party_request.method if third_party_request and third_party_request.method else THIRD_PARTY_METHOD
+        
+        # 配置的headers body参数headers or 环境变量 THIRD_PARTY_HEADERS，字段相同环境变量优先级高
+        headers = {}
+        if third_party_request and third_party_request.headers:
+            headers.update(third_party_request.headers)
+        elif THIRD_PARTY_HEADERS:
+            headers.update(THIRD_PARTY_HEADERS)
+
+        # 合并参数：查询参数 + 配置的参数
+        params = {**query_params}
+        if third_party_request and third_party_request.params:
+            params.update(third_party_request.params)
+        elif THIRD_PARTY_PARAMS:
+            params.update(THIRD_PARTY_PARAMS)
+
+        # 发送请求
+        print(f'call_third_party url: {url}')
+        print(f'call_third_party method: {method}')
+        print(f'call_third_party headers: {headers}')
+        print(f'call_third_party params: {params}')
+        response = requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            params=params if method.upper() == "GET" else None,
+            json=params if method.upper() != "GET" else None
+        )
+
+        # 尝试解析JSON响应
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            return {"content": response.text}
+
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Third party API error: {str(e)}"
+        )
+
+
+@app.post("/three-party-oh")
+async def call_third_party_original_headers(request: Request, third_party_request: Optional[ThirdPartyRequest] = None):
+    """
+    调用第三方接口，保留原始请求头自定义字段
+    """
+    try:
         # 获取原始请求的headers
         original_headers = dict(request.headers)
         # 移除一些不需要转发的headers
@@ -111,7 +164,7 @@ async def call_third_party(request: Request, third_party_request: Optional[Third
         method = third_party_request.method if third_party_request and third_party_request.method else THIRD_PARTY_METHOD
         
         # 合并headers：原始请求headers + 配置的headers
-        headers = {**original_headers}
+        headers = {**original_headers}  #去掉原始请求头
         if third_party_request and third_party_request.headers:
             headers.update(third_party_request.headers)
         elif THIRD_PARTY_HEADERS:
@@ -125,6 +178,10 @@ async def call_third_party(request: Request, third_party_request: Optional[Third
             params.update(THIRD_PARTY_PARAMS)
 
         # 发送请求
+        print(f'call_third_party url: {url}')
+        print(f'call_third_party method: {method}')
+        print(f'call_third_party headers: {headers}')
+        print(f'call_third_party params: {params}')
         response = requests.request(
             method=method,
             url=url,
